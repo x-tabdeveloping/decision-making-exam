@@ -1,17 +1,11 @@
 from functools import partial
 
-import arviz as az
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from jax.scipy import stats
-from numpyro.infer import MCMC, NUTS, Predictive
 
 # numpyro.set_host_device_count(4)
 
