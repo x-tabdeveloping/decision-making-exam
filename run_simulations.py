@@ -48,7 +48,7 @@ def main():
     n_experiments = 10
     n_arms = 4
     key = jax.random.key(42)
-    experiments_dir = Path("../experiments")
+    experiments_dir = Path("/experiments")
     experiments_dir.mkdir(exist_ok=True)
 
     for i_experiment in range(n_experiments):
@@ -71,7 +71,9 @@ def main():
             stop_condition=stop_condition,
         )
         params = {key: value[0] for key, value in params.items()}
-        experiment["params"] = stop_condition
+        print("True parameters: ", params)
+        experiment["params"] = params
+        experiment["stop_condition"] = stop_condition
         print("Simulating rewards")
         key, subkey = jax.random.split(key)
         p_win = jax.random.uniform(subkey, shape=n_arms, minval=0, maxval=1)
