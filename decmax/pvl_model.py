@@ -57,9 +57,6 @@ def pvl_model(
     lr_loc = numpyro.sample("lr_loc", dist.Normal(loc=0, scale=1))
     lr_scale = numpyro.sample("lr_scale", dist.Uniform(0, 1))
     stop_lr_effect = numpyro.sample("stop_lr_effect", dist.Normal(loc=0, scale=1))
-    inv_t_loc = numpyro.sample("inv_t_loc", dist.Normal(loc=0, scale=1))
-    inv_t_scale = numpyro.sample("inv_t_scale", dist.Uniform(0, 1))
-    stop_inv_t_effect = numpyro.sample("stop_inv_t_effect", dist.Normal(loc=0, scale=1))
     probit_lr = numpyro.sample(
         "probit_lr",
         dist.Normal(
@@ -67,6 +64,9 @@ def pvl_model(
         ),
     )
     lr = numpyro.deterministic("lr", inv_probit(probit_lr))
+    inv_t_loc = numpyro.sample("inv_t_loc", dist.Normal(loc=0, scale=1))
+    inv_t_scale = numpyro.sample("inv_t_scale", dist.Uniform(0, 1))
+    stop_inv_t_effect = numpyro.sample("stop_inv_t_effect", dist.Normal(loc=0, scale=1))
     probit_inv_t = numpyro.sample(
         "probit_inv_t",
         dist.Normal(
@@ -77,21 +77,30 @@ def pvl_model(
     inv_t = numpyro.deterministic("inv_t", 5 * inv_probit(probit_inv_t))
     u_shape_loc = numpyro.sample("u_shape_loc", dist.Normal(loc=0, scale=1))
     u_shape_scale = numpyro.sample("u_shape_scale", dist.Uniform(0, 1))
+    stop_u_shape_effect = numpyro.sample(
+        "stop_u_shape_effect", dist.Normal(loc=0, scale=1)
+    )
+    probit_u_shape = numpyro.sample(
+        "probit_u_shape",
+        dist.Normal(
+            u_shape_loc + stop_u_shape_effect * stop_condition,
+            jnp.full(n_subjects, u_shape_scale),
+        ),
+    )
+    u_shape = numpyro.deterministic("u_shape", inv_probit(probit_u_shape))
     u_aversion_loc = numpyro.sample("u_aversion_loc", dist.Normal(loc=0, scale=1))
     u_aversion_scale = numpyro.sample("u_aversion_scale", dist.Uniform(0, 1))
-    with numpyro.plate("n_subjects", n_subjects):
-        probit_u_aversion = numpyro.sample(
-            "probit_u_aversion",
-            dist.Normal(loc=u_aversion_loc, scale=u_aversion_scale),
-        )
-        probit_u_shape = numpyro.sample(
-            "probit_u_shape",
-            dist.Normal(loc=u_shape_loc, scale=u_shape_scale),
-        )
-        u_aversion = numpyro.deterministic(
-            "u_aversion", 5 * inv_probit(probit_u_aversion)
-        )
-        u_shape = numpyro.deterministic("u_shape", inv_probit(probit_u_shape))
+    stop_u_aversion_effect = numpyro.sample(
+        "stop_u_aversion_effect", dist.Normal(loc=0, scale=1)
+    )
+    probit_u_aversion = numpyro.sample(
+        "probit_u_aversion",
+        dist.Normal(
+            u_aversion_loc + stop_u_aversion_effect * stop_condition,
+            jnp.full(n_subjects, u_aversion_scale),
+        ),
+    )
+    u_aversion = numpyro.deterministic("u_aversion", 5 * inv_probit(probit_u_aversion))
     if not prior:
         q0 = np.zeros((n_subjects, n_arms), dtype=jnp.float64)
         q = trace_qs(choices, rewards, q0, lr, u_aversion, u_shape)
