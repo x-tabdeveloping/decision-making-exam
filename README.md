@@ -3,7 +3,7 @@ Our exam project for decision making on the Cognitive Science Master programme a
 
 ## How to use the model?
 
-In order to use the model that we used for our experiments, use the `decmax` module in this repository.
+In order to use the model that we used for our experiments, use the `pvl_delta` module in this repository.
 It contains a NumPyro-compatible PVL model.
 
 ### Installation
@@ -26,11 +26,11 @@ import numpy as np
 import jax
 from numpyro.infer import Predictive
 
-from decmax.pvl_model import pvl_model
+from pvl_delta import pvl_delta_model
 
 rng_key = jax.random.key(42)
 prior = Predictive(
-    pvl_model,
+    pvl_delta_model,
     num_samples=1000,
 )
 key, subkey = jax.random.split(key)
@@ -77,7 +77,7 @@ rewards = np.array([
 # The posterior is very hard to sample so we increase the target acceptance probability
 # to 0.9 from 0.8 to avoid having too many divergences
 inference_key = jax.random.key(0)
-nuts_kernel = NUTS(pvl_model, target_accept_prob=0.9)
+nuts_kernel = NUTS(pvl_delta_model, target_accept_prob=0.9)
 mcmc = MCMC(nuts_kernel, num_samples=1000, num_warmup=3000, num_chains=4)
 key, subkey = jax.random.split(key)
 mcmc.run(
@@ -103,7 +103,7 @@ Consult [ArViz's](https://python.arviz.org/en/stable/index.html) manual and [Xar
 You can use NumPyro to get posterior predictive estimates for subjects' choices.
 
 ```python
-predictive = Predictive(pvl_model, mcmc.get_samples())
+predictive = Predictive(pvl_delta_model, mcmc.get_samples())
 ppc_key = jax.random.key(0)
 posterior_predictive = predictive(
     ppc_key,
@@ -124,7 +124,7 @@ You can get an estimate of these expected values at each time point during the e
 In this example I will use the posterior mean as a point estimate.
 
 ```python
-from decmax.pvl_model import trace_qs
+from pvl_delta import trace_qs
 
 # Taking the mean over each chain and draw from the posterior
 mean_posterior = idata.posterior.mean(dim=["chain", "draw"])

@@ -7,8 +7,6 @@ import numpyro
 import numpyro.distributions as dist
 from jax.scipy import stats
 
-# numpyro.set_host_device_count(4)
-
 
 def inv_probit(x):
     return stats.norm.cdf(x, loc=0.0, scale=1.0)
@@ -51,7 +49,7 @@ def trace_qs(c, r, q0s, learning_rates, u_aversion, u_shape):
     return states
 
 
-def pvl_model(
+def pvl_delta_model(
     stop_condition, n_arms, n_subjects, rewards=None, choices=None, prior=False
 ):
     lr_loc = numpyro.sample("lr_loc", dist.Normal(loc=0, scale=1))

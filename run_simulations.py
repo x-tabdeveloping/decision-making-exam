@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import joblib
 from numpyro.infer import MCMC, NUTS, Predictive
 
-from decmax.pvl_model import pvl_model
+from pvl_delta import pvl_delta_model
 
 
 def simulate_outcomes(
@@ -91,7 +91,7 @@ def main():
         experiment["rewards"] = rewards
         experiment["choices"] = choices
         print("Recovering parameters with model:")
-        nuts_kernel = NUTS(pvl_model, target_accept_prob=0.9)
+        nuts_kernel = NUTS(pvl_delta_model, target_accept_prob=0.9)
         mcmc = MCMC(nuts_kernel, num_samples=1000, num_warmup=3000, num_chains=4)
         key, subkey = jax.random.split(key)
         mcmc.run(
@@ -106,7 +106,7 @@ def main():
         mcmc.print_summary()
         idata = az.from_numpyro(mcmc)
         print("Sampling posterior predictive")
-        predictive = Predictive(pvl_model, mcmc.get_samples())
+        predictive = Predictive(pvl_delta_model, mcmc.get_samples())
         key, subkey = jax.random.split(key)
         posterior_predictive = predictive(
             subkey,

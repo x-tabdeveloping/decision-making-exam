@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sklearn.metrics import f1_score
 
-from decmax.pvl_model import trace_qs
+from pvl_delta import trace_qs
 
 experiments_path = Path("experiments")
 experiment_files = [file for file in experiments_path.glob("*.joblib")]
