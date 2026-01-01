@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import joblib
 from numpyro.infer import MCMC, NUTS, Predictive
 
-from pvl_delta import pvl_delta_model
+from pvl_delta import pvl_delta_model, utility_function
 
 
 def simulate_outcomes(
@@ -32,8 +32,26 @@ def simulate_outcomes(
             key, subkey = jax.random.split(key)
             choice = jax.random.categorical(subkey, logits=logits)
             key, subkey = jax.random.split(key)
-            reward = jax.random.binomial(key, 1, p_win[choice]) * reward_arm[choice]
-            regret = reward - q_ts[i_subject, choice]
+            success = jax.random.binomial(subkey, 1, p_win[choice])
+            key, subkey = jax.random.split(key)
+            stake = jax.random.categorical(subkey, jnp.ones(3))
+            # Calculating reward based on stake.
+            # For each step in stake we multiply by two
+            # reward_arm contains the lowest stakes
+            potential_reward = reward_arm[choice] * jnp.power(2, stake)
+            if success == 1:
+                reward = potential_reward
+            else:
+                # Subjects lose half the amount on non-succesful trials
+                reward = -potential_reward / 2
+            regret = (
+                utility_function(
+                    reward,
+                    params["u_aversion"][i_subject],
+                    params["u_shape"][i_subject],
+                )
+                - q_ts[i_subject, choice]
+            )
             q_ts = q_ts.at[i_subject, choice].add(params["lr"][i_subject] * regret)
             _reward.append(reward)
             _choice.append(choice)
@@ -43,12 +61,17 @@ def simulate_outcomes(
 
 
 def main():
-    n_trials = 100
-    n_subjects = 4
+    n_trials = 202
+    n_subjects = 64
     n_experiments = 10
-    n_arms = 4
+    n_arms = 6
+    p_win = jnp.array([0.2, 0.25, 0.33, 0.47, 0.61, 0.87])
+    # We denote them in the lowest stake
+    win_reward = jnp.array([64, 32, 16, 8, 4, 2])
+    # We calculate joint EV for all stakes
+    ev = win_reward / 3 * (10.5 * p_win - 3.5)
     key = jax.random.key(42)
-    experiments_dir = Path("/experiments")
+    experiments_dir = Path("experiments/")
     experiments_dir.mkdir(exist_ok=True)
 
     for i_experiment in range(n_experiments):
@@ -59,7 +82,7 @@ def main():
         stop_condition = jax.random.bernoulli(subkey, p=0.5, shape=n_subjects)
         experiment["stop_condition"] = stop_condition
         prior = Predictive(
-            pvl_model,
+            pvl_delta_model,
             num_samples=1,
         )
         key, subkey = jax.random.split(key)
@@ -75,11 +98,6 @@ def main():
         experiment["params"] = params
         experiment["stop_condition"] = stop_condition
         print("Simulating rewards")
-        key, subkey = jax.random.split(key)
-        p_win = jax.random.uniform(subkey, shape=n_arms, minval=0, maxval=1)
-        key, subkey = jax.random.split(key)
-        win_reward = jax.random.gamma(subkey, a=1.0, shape=n_arms)
-        ev = p_win * win_reward
         experiment["p_win"] = p_win
         experiment["win_reward"] = win_reward
         experiment["ev"] = ev
