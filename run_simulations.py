@@ -4,9 +4,13 @@ import arviz as az
 import jax
 import jax.numpy as jnp
 import joblib
+import numpyro
 from numpyro.infer import MCMC, NUTS, Predictive
 
 from pvl_delta import pvl_delta_model, utility_function
+
+numpyro.set_platform("cpu")
+numpyro.set_host_device_count(4)
 
 
 def simulate_outcomes(
