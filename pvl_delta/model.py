@@ -13,10 +13,11 @@ def inv_probit(x):
 
 
 def utility_function(outcome, u_aversion, u_shape):
+    abs_outcome = jnp.abs(outcome)
     return jnp.where(
-        outcome > 0,
-        jnp.power(outcome, u_shape),
-        -u_aversion * jnp.power(jnp.abs(outcome), u_shape),
+        outcome >= 0,
+        jnp.float_power(abs_outcome, u_shape),
+        -u_aversion * jnp.float_power(abs_outcome, u_shape),
     )
 
 
@@ -102,5 +103,6 @@ def pvl_delta_model(
     if not prior:
         q0 = np.zeros((n_subjects, n_arms), dtype=jnp.float64)
         q = trace_qs(choices, rewards, q0, lr, u_aversion, u_shape)
-        logits = q * inv_t[:, None]
+        theta = numpyro.deterministic("theta", jnp.power(3, inv_t) - 1)
+        logits = q * theta[:, None]
         numpyro.sample("obs", dist.Categorical(logits=logits), obs=choices)
