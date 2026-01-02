@@ -21,7 +21,7 @@ def simulate_outcomes(
     reward_arm,
     random_state=42,
 ):
-    n_subjects = params["lr"].shape[0]
+    n_subjects = params["probit_lr"].shape[0]
     key = jax.random.key(random_state)
     n_arms = p_win.shape[0]
     q0s = jnp.zeros((n_subjects, n_arms))
