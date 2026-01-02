@@ -7,7 +7,7 @@ import joblib
 import numpyro
 from numpyro.infer import MCMC, NUTS, Predictive
 
-from pvl_delta import pvl_delta_model, utility_function
+from pvl_delta import inv_probit, pvl_delta_model, utility_function
 
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(4)
@@ -28,11 +28,26 @@ def simulate_outcomes(
     q_ts = q0s
     choices = []
     rewards = []
+    key, subkey = jax.random.split(key)
+    # Randomly generating load for first trial
+    load_blocks = [jax.random.binomial(subkey, 1, jnp.full(n_subjects, 0.5))]
     for i_trial in range(n_trials_per_subject):
         _choice = []
         _reward = []
+        load = load_blocks[-1]
+        inv_t = 5 * inv_probit(
+            params["probit_inv_t"] + params["load_inv_t_effect"] * load
+        )
+        theta = jnp.power(3, inv_t) - 1
+        u_aversion = inv_probit(
+            5 * (params["probit_u_aversion"] + params["load_u_aversion_effect"] * load)
+        )
+        u_shape = inv_probit(
+            params["probit_u_shape"] + params["load_u_shape_effect"] * load
+        )
+        lr = inv_probit(params["probit_lr"] + params["load_lr_effect"] * load)
         for i_subject in range(n_subjects):
-            logits = params["inv_t"][i_subject] * q_ts[i_subject]
+            logits = theta[i_subject] * q_ts[i_subject]
             key, subkey = jax.random.split(key)
             choice = jax.random.categorical(subkey, logits=logits)
             key, subkey = jax.random.split(key)
@@ -51,17 +66,19 @@ def simulate_outcomes(
             regret = (
                 utility_function(
                     reward,
-                    params["u_aversion"][i_subject],
-                    params["u_shape"][i_subject],
+                    u_aversion[i_subject],
+                    u_shape[i_subject],
                 )
                 - q_ts[i_subject, choice]
             )
-            q_ts = q_ts.at[i_subject, choice].add(params["lr"][i_subject] * regret)
+            q_ts = q_ts.at[i_subject, choice].add(lr[i_subject] * regret)
             _reward.append(reward)
             _choice.append(choice)
+        # Alternating load-no_load
+        load_blocks.append(jnp.abs(load - 1))
         choices.append(_choice)
         rewards.append(_reward)
-    return jnp.array(rewards), jnp.array(choices)
+    return jnp.array(rewards), jnp.array(choices), jnp.stack(load_blocks[:-1])
 
 
 def main():
@@ -107,7 +124,7 @@ def main():
         experiment["ev"] = ev
         print("True expected values: ", ev)
         print("Simulating outcomes: ")
-        rewards, choices = simulate_outcomes(
+        rewards, choices, load_blocks = simulate_outcomes(
             params, stop_condition, n_trials, p_win, win_reward
         )
         experiment["rewards"] = rewards
@@ -121,6 +138,7 @@ def main():
             choices=choices,
             rewards=rewards,
             stop_condition=stop_condition,
+            load_blocks=load_blocks,
             n_arms=n_arms,
             n_subjects=n_subjects,
         )
