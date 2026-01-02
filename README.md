@@ -34,10 +34,10 @@ prior = Predictive(
     num_samples=1000,
 )
 key, subkey = jax.random.split(key)
-n_subjects=4
-n_arms=4
+n_subjects = 4
+n_arms = 4
 # Indicates whether each subject belonged to the stop condition group or not
-stop_condition=np.array([False, True, True, False])
+stop_condition = np.array([False, True, True, False])
 prior_sample = prior(
     subkey,
     # You have to specify that this is for prior sampling,
@@ -74,6 +74,15 @@ rewards = np.array([
   [0.0, 0.25, 0.5, 0.25],
   ...
 ])
+# Indicates whether each subject was presented with a load block or not on a given trial
+# Shape: (n_trials, n_subjects)
+load_blocks = np.array(
+  [
+    [True, True, False, False],
+    [False, False, True, True],
+    ...
+  ]
+)
 # The posterior is very hard to sample so we increase the target acceptance probability
 # to 0.9 from 0.8 to avoid having too many divergences
 inference_key = jax.random.key(0)
@@ -84,6 +93,7 @@ mcmc.run(
     inference_key,
     choices=choices,
     rewards=rewards,
+    load_blocks=load_blocks,
     stop_condition=stop_condition,
     n_arms=n_arms,
     n_subjects=n_subjects,
