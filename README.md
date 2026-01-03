@@ -173,7 +173,7 @@ from pvl_delta.plots import plot_utilities
 plot_utilities(idata, load_blocks, stop_condition)
 ```
 
-![utilities](figures/example_utilites.png)
+![utilities](figures/example_utilities.png)
 
 You can plot true choices vs predicted ones using `plot_choices``:
 ```python
