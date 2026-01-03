@@ -168,6 +168,7 @@ def main():
             stop_condition=stop_condition,
             n_arms=n_arms,
             n_subjects=n_subjects,
+            load_blocks=load_blocks,
         )
         idata.extend(az.from_numpyro(posterior_predictive=posterior_predictive))
         experiment["idata"] = idata
