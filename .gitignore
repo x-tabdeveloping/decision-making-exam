@@ -1,3 +1,10 @@
+# Project-specific ignores
+.DS_Store
+*.Rdata
+~$*
+.python-version
+fitted_models/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
