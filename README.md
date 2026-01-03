@@ -161,3 +161,45 @@ q_pred = trace_qs(
     u_shape=mean_posterior["u_shape"].values,
 )
 ```
+
+## Visualization 
+
+The `pvl_delta.plots` module contains a number of figures you can easily produce once having fit the model:
+
+You can plot the mean utility function using `plot_utilities` for conditions and blocks:
+```python
+from pvl_delta.plots import plot_utilities
+
+plot_utilities(idata, load_blocks, stop_condition)
+```
+
+![utilities](figures/example_utilites.png)
+
+You can plot true choices vs predicted ones using `plot_choices``:
+```python
+from pvl_delta.plots import plot_choices
+
+plot_choices(idata, choices)
+```
+
+![choices](figures/example_choices.png)
+
+You can investigate effects by using `plot_effects`:
+
+```python
+from pvl_delta.plots import plot_effects
+
+plot_effects(idata)
+```
+
+![effects](figures/example_effects.png)
+
+And you can see different params in the original space across conditions by using `plot_params`:
+
+```python
+from pvl_delta.plots import plot_params
+
+plot_params(idata, stop_condition)
+```
+
+![params](figures/example_params.png)
