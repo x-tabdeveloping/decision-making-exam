@@ -138,13 +138,12 @@ def main():
             "probit_u_aversion": LocScaleReparam(centered=0),
         }
         reparam_model = numpyro.handlers.reparam(pvl_delta_model, config=config)
-        nuts_kernel = NUTS(reparam_model, target_accept_prob=0.9)
+        nuts_kernel = NUTS(reparam_model, target_accept_prob=0.9, max_tree_depth=15)
         mcmc = MCMC(
             nuts_kernel,
             num_samples=1000,
             num_warmup=3000,
             num_chains=4,
-            max_tree_depth=15,
         )
         key, subkey = jax.random.split(key)
         mcmc.run(
