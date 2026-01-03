@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import joblib
 import numpyro
 from numpyro.infer import MCMC, NUTS, Predictive
+from numpyro.infer.reparam import LocScaleReparam
 
 from pvl_delta import inv_probit, pvl_delta_model, utility_function
 
@@ -130,8 +131,21 @@ def main():
         experiment["rewards"] = rewards
         experiment["choices"] = choices
         print("Recovering parameters with model:")
-        nuts_kernel = NUTS(pvl_delta_model, target_accept_prob=0.9)
-        mcmc = MCMC(nuts_kernel, num_samples=1000, num_warmup=3000, num_chains=4)
+        config = {
+            "probit_lr": LocScaleReparam(centered=0),
+            "probit_inv_t": LocScaleReparam(centered=0),
+            "probit_u_shape": LocScaleReparam(centered=0),
+            "probit_u_aversion": LocScaleReparam(centered=0),
+        }
+        reparam_model = numpyro.handlers.reparam(pvl_delta_model, config=config)
+        nuts_kernel = NUTS(reparam_model, target_accept_prob=0.9)
+        mcmc = MCMC(
+            nuts_kernel,
+            num_samples=1000,
+            num_warmup=3000,
+            num_chains=4,
+            max_tree_depth=15,
+        )
         key, subkey = jax.random.split(key)
         mcmc.run(
             subkey,
