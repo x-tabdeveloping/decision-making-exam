@@ -160,7 +160,7 @@ def main():
         mcmc.print_summary()
         idata = az.from_numpyro(mcmc)
         print("Sampling posterior predictive")
-        predictive = Predictive(pvl_delta_model, mcmc.get_samples())
+        predictive = Predictive(reparam_model, mcmc.get_samples())
         key, subkey = jax.random.split(key)
         posterior_predictive = predictive(
             subkey,
