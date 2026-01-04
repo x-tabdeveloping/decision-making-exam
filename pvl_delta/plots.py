@@ -99,9 +99,9 @@ def plot_choices(idata, choices, prior=False):
 def plot_effects(idata):
     vars = {"u_shape": "A'", "u_aversion": "w'", "lr": "a'", "inv_t": "c'"}
     fig = go.Figure()
-    colors = px.colors.qualitative.Bold
+    colors = px.colors.qualitative.Dark24
     for i_var, var in enumerate(vars):
-        for i_cond, cond in enumerate(["load", "stop"]):
+        for i_cond, cond in enumerate(["load", "stop", "interaction"]):
             i_effect = i_var + i_cond * len(vars)
             effect_name = f"{cond}_{var}_effect"
             lower, higher = az.hdi(idata.posterior, var_names=effect_name)[
@@ -109,7 +109,9 @@ def plot_effects(idata):
             ].values
             mean = idata.posterior[effect_name].values.mean()
             proper_name = vars[var]
-            effect_title = "\\beta" if cond == "stop" else "\\pi"
+            effect_title = (
+                "\\beta" if cond == "stop" else "\\pi" if cond == "load" else "\\zeta"
+            )
             effect_title = f"${effect_title}_{proper_name}$"
             color = colors[i_effect]
             data = np.ravel(idata.posterior[effect_name].values)

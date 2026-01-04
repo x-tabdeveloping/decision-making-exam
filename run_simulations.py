@@ -37,16 +37,26 @@ def simulate_outcomes(
         _reward = []
         load = load_blocks[-1]
         inv_t = 5 * inv_probit(
-            params["probit_inv_t"] + params["load_inv_t_effect"] * load
+            params["probit_inv_t"]
+            + params["load_inv_t_effect"] * load
+            + params["interaction_inv_t_effect"] * load * stop_condition
         )
         theta = jnp.power(3, inv_t) - 1
-        u_aversion = inv_probit(
-            5 * (params["probit_u_aversion"] + params["load_u_aversion_effect"] * load)
+        u_aversion = 5 * inv_probit(
+            params["probit_u_aversion"]
+            + params["load_u_aversion_effect"] * load
+            + +params["interaction_u_aversion_effect"] * load * stop_condition
         )
         u_shape = inv_probit(
-            params["probit_u_shape"] + params["load_u_shape_effect"] * load
+            params["probit_u_shape"]
+            + params["load_u_shape_effect"] * load
+            + params["interaction_u_shape_effect"] * load * stop_condition
         )
-        lr = inv_probit(params["probit_lr"] + params["load_lr_effect"] * load)
+        lr = inv_probit(
+            params["probit_lr"]
+            + params["load_lr_effect"] * load
+            + params["interaction_lr_effect"] * load * stop_condition
+        )
         for i_subject in range(n_subjects):
             logits = theta[i_subject] * q_ts[i_subject]
             key, subkey = jax.random.split(key)

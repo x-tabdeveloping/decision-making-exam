@@ -76,6 +76,9 @@ def pvl_delta_model(
     lr_scale = numpyro.sample("lr_scale", dist.Uniform(0, 1))
     stop_lr_effect = numpyro.sample("stop_lr_effect", dist.Normal(loc=0, scale=1))
     load_lr_effect = numpyro.sample("load_lr_effect", dist.Normal(loc=0, scale=1))
+    interaction_lr_effect = numpyro.sample(
+        "interaction_lr_effect", dist.Normal(loc=0, scale=1)
+    )
     probit_lr = numpyro.sample(
         "probit_lr",
         dist.Normal(
@@ -86,6 +89,9 @@ def pvl_delta_model(
     inv_t_scale = numpyro.sample("inv_t_scale", dist.Uniform(0, 1))
     stop_inv_t_effect = numpyro.sample("stop_inv_t_effect", dist.Normal(loc=0, scale=1))
     load_inv_t_effect = numpyro.sample("load_inv_t_effect", dist.Normal(loc=0, scale=1))
+    interaction_inv_t_effect = numpyro.sample(
+        "interaction_inv_t_effect", dist.Normal(loc=0, scale=1)
+    )
     probit_inv_t = numpyro.sample(
         "probit_inv_t",
         dist.Normal(
@@ -100,6 +106,9 @@ def pvl_delta_model(
     )
     load_u_shape_effect = numpyro.sample(
         "load_u_shape_effect", dist.Normal(loc=0, scale=1)
+    )
+    interaction_u_shape_effect = numpyro.sample(
+        "interaction_u_shape_effect", dist.Normal(loc=0, scale=1)
     )
     probit_u_shape = numpyro.sample(
         "probit_u_shape",
@@ -116,6 +125,9 @@ def pvl_delta_model(
     stop_u_aversion_effect = numpyro.sample(
         "stop_u_aversion_effect", dist.Normal(loc=0, scale=1)
     )
+    interaction_u_aversion_effect = numpyro.sample(
+        "interaction_u_aversion_effect", dist.Normal(loc=0, scale=1)
+    )
     probit_u_aversion = numpyro.sample(
         "probit_u_aversion",
         dist.Normal(
@@ -126,22 +138,38 @@ def pvl_delta_model(
     if not prior:
         # Adding the trial-level load block effect before transforming
         lr = numpyro.deterministic(
-            "lr", inv_probit(probit_lr[None, :] + load_lr_effect * load_blocks)
+            "lr",
+            inv_probit(
+                probit_lr[None, :]
+                + load_lr_effect * load_blocks
+                + interaction_lr_effect * stop_condition[None, :] * load_blocks
+            ),
         )
         u_aversion = numpyro.deterministic(
             "u_aversion",
             5
             * inv_probit(
-                probit_u_aversion[None, :] + load_u_aversion_effect * load_blocks
+                probit_u_aversion[None, :]
+                + load_u_aversion_effect * load_blocks
+                + interaction_u_aversion_effect * stop_condition[None, :] * load_blocks
             ),
         )
         u_shape = numpyro.deterministic(
             "u_shape",
-            inv_probit(probit_u_shape[None, :] + load_u_shape_effect * load_blocks),
+            inv_probit(
+                probit_u_shape[None, :]
+                + load_u_shape_effect * load_blocks
+                + interaction_u_shape_effect * stop_condition[None, :] * load_blocks
+            ),
         )
         inv_t = numpyro.deterministic(
             "inv_t",
-            5 * inv_probit(probit_inv_t[None, :] + load_inv_t_effect * load_blocks),
+            5
+            * inv_probit(
+                probit_inv_t[None, :]
+                + load_inv_t_effect * load_blocks
+                + interaction_inv_t_effect * stop_condition[None, :] * load_blocks
+            ),
         )
         theta = numpyro.deterministic("theta", jnp.power(3, inv_t) - 1)
         q0 = np.zeros((n_subjects, n_arms), dtype=jnp.float64)
