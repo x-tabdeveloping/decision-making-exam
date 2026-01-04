@@ -79,25 +79,12 @@ def pvl_delta_model(
     interaction_lr_effect = numpyro.sample(
         "interaction_lr_effect", dist.Normal(loc=0, scale=1)
     )
-    probit_lr = numpyro.sample(
-        "probit_lr",
-        dist.Normal(
-            lr_loc + stop_lr_effect * stop_condition, jnp.full(n_subjects, lr_scale)
-        ),
-    )
     inv_t_loc = numpyro.sample("inv_t_loc", dist.Normal(loc=0, scale=1))
     inv_t_scale = numpyro.sample("inv_t_scale", dist.Uniform(0, 1))
     stop_inv_t_effect = numpyro.sample("stop_inv_t_effect", dist.Normal(loc=0, scale=1))
     load_inv_t_effect = numpyro.sample("load_inv_t_effect", dist.Normal(loc=0, scale=1))
     interaction_inv_t_effect = numpyro.sample(
         "interaction_inv_t_effect", dist.Normal(loc=0, scale=1)
-    )
-    probit_inv_t = numpyro.sample(
-        "probit_inv_t",
-        dist.Normal(
-            inv_t_loc + stop_inv_t_effect * stop_condition,
-            jnp.full(n_subjects, inv_t_scale),
-        ),
     )
     u_shape_loc = numpyro.sample("u_shape_loc", dist.Normal(loc=0, scale=1))
     u_shape_scale = numpyro.sample("u_shape_scale", dist.Uniform(0, 1))
@@ -110,13 +97,6 @@ def pvl_delta_model(
     interaction_u_shape_effect = numpyro.sample(
         "interaction_u_shape_effect", dist.Normal(loc=0, scale=1)
     )
-    probit_u_shape = numpyro.sample(
-        "probit_u_shape",
-        dist.Normal(
-            u_shape_loc + stop_u_shape_effect * stop_condition,
-            jnp.full(n_subjects, u_shape_scale),
-        ),
-    )
     u_aversion_loc = numpyro.sample("u_aversion_loc", dist.Normal(loc=0, scale=1))
     u_aversion_scale = numpyro.sample("u_aversion_scale", dist.Uniform(0, 1))
     load_u_aversion_effect = numpyro.sample(
@@ -128,19 +108,24 @@ def pvl_delta_model(
     interaction_u_aversion_effect = numpyro.sample(
         "interaction_u_aversion_effect", dist.Normal(loc=0, scale=1)
     )
-    probit_u_aversion = numpyro.sample(
-        "probit_u_aversion",
-        dist.Normal(
-            u_aversion_loc + stop_u_aversion_effect * stop_condition,
-            jnp.full(n_subjects, u_aversion_scale),
-        ),
-    )
+    with numpyro.plate("n_subjects", n_subjects):
+        probit_lr = numpyro.sample("probit_lr", dist.Normal(lr_loc, lr_scale))
+        probit_inv_t = numpyro.sample(
+            "probit_inv_t", dist.Normal(inv_t_loc, inv_t_scale)
+        )
+        probit_u_aversion = numpyro.sample(
+            "probit_u_aversion", dist.Normal(u_aversion_loc, u_aversion_scale)
+        )
+        probit_u_shape = numpyro.sample(
+            "probit_u_shape", dist.Normal(u_shape_loc, u_shape_scale)
+        )
     if not prior:
         # Adding the trial-level load block effect before transforming
         lr = numpyro.deterministic(
             "lr",
             inv_probit(
                 probit_lr[None, :]
+                + (stop_lr_effect * stop_condition)[None, :]
                 + load_lr_effect * load_blocks
                 + interaction_lr_effect * stop_condition[None, :] * load_blocks
             ),
@@ -150,6 +135,7 @@ def pvl_delta_model(
             5
             * inv_probit(
                 probit_u_aversion[None, :]
+                + (stop_u_aversion_effect * stop_condition)[None, :]
                 + load_u_aversion_effect * load_blocks
                 + interaction_u_aversion_effect * stop_condition[None, :] * load_blocks
             ),
@@ -158,6 +144,7 @@ def pvl_delta_model(
             "u_shape",
             inv_probit(
                 probit_u_shape[None, :]
+                + (stop_u_shape_effect * stop_condition)[None, :]
                 + load_u_shape_effect * load_blocks
                 + interaction_u_shape_effect * stop_condition[None, :] * load_blocks
             ),
@@ -167,6 +154,7 @@ def pvl_delta_model(
             5
             * inv_probit(
                 probit_inv_t[None, :]
+                + (stop_inv_t_effect * stop_condition)[None, :]
                 + load_inv_t_effect * load_blocks
                 + interaction_inv_t_effect * stop_condition[None, :] * load_blocks
             ),
