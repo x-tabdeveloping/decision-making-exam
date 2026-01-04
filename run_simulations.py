@@ -38,22 +38,26 @@ def simulate_outcomes(
         load = load_blocks[-1]
         inv_t = 5 * inv_probit(
             params["probit_inv_t"]
+            + params["stop_inv_t_effect"] * stop_condition
             + params["load_inv_t_effect"] * load
             + params["interaction_inv_t_effect"] * load * stop_condition
         )
         theta = jnp.power(3, inv_t) - 1
         u_aversion = 5 * inv_probit(
             params["probit_u_aversion"]
+            + params["stop_u_aversion_effect"] * stop_condition
             + params["load_u_aversion_effect"] * load
             + +params["interaction_u_aversion_effect"] * load * stop_condition
         )
         u_shape = inv_probit(
             params["probit_u_shape"]
+            + params["stop_u_shape_effect"] * stop_condition
             + params["load_u_shape_effect"] * load
             + params["interaction_u_shape_effect"] * load * stop_condition
         )
         lr = inv_probit(
             params["probit_lr"]
+            + params["stop_lr_effect"] * stop_condition
             + params["load_lr_effect"] * load
             + params["interaction_lr_effect"] * load * stop_condition
         )
@@ -152,7 +156,7 @@ def main():
         mcmc = MCMC(
             nuts_kernel,
             num_samples=1000,
-            num_warmup=3000,
+            num_warmup=5000,
             num_chains=4,
         )
         key, subkey = jax.random.split(key)
