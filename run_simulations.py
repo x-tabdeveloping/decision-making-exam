@@ -5,13 +5,21 @@ import jax
 import jax.numpy as jnp
 import joblib
 import numpyro
+from numpyro.diagnostics import summary
 from numpyro.infer import MCMC, NUTS, Predictive
 from numpyro.infer.reparam import LocScaleReparam
 
-from pvl_delta import inv_probit, pvl_delta_model, utility_function
+from pvl_delta import (interaction_model, inv_probit, pvl_delta_model,
+                       utility_function, vanilla_model)
 
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(4)
+
+MODELS = {
+    "full": pvl_delta_model,
+    "interactions_only": interaction_model,
+    "vanilla": vanilla_model,
+}
 
 
 def simulate_outcomes(
@@ -106,17 +114,19 @@ def main():
     win_reward = jnp.array([64, 32, 16, 8, 4, 2])
     # We calculate joint EV for all stakes
     ev = win_reward / 3 * (10.5 * p_win - 3.5)
-    key = jax.random.key(42)
-    experiments_dir = Path("experiments/")
+    experiments_dir = Path("simulation_results/")
     experiments_dir.mkdir(exist_ok=True)
-
+    keys = [jax.random.key(n) for n in range(40, 50)]
     for i_experiment in range(n_experiments):
         experiment = dict()
         print(f"=============[Experiment {i_experiment}]==============")
         print("Sampling parameters from prior")
+        key = jax.random.key(keys[i_experiment])
+        experiment["key"] = keys[i_experiment]
         key, subkey = jax.random.split(key)
         stop_condition = jax.random.bernoulli(subkey, p=0.5, shape=n_subjects)
         experiment["stop_condition"] = stop_condition
+        # We always generate from the full model:
         prior = Predictive(
             pvl_delta_model,
             num_samples=1,
@@ -142,54 +152,61 @@ def main():
         rewards, choices, load_blocks = simulate_outcomes(
             params, stop_condition, n_trials, p_win, win_reward
         )
+        experiment["load_blocks"] = load_blocks
         experiment["rewards"] = rewards
         experiment["choices"] = choices
-        print("Recovering parameters with model:")
-        config = {
-            "probit_lr": LocScaleReparam(centered=0),
-            "probit_inv_t": LocScaleReparam(centered=0),
-            "probit_u_shape": LocScaleReparam(centered=0),
-            "probit_u_aversion": LocScaleReparam(centered=0),
-        }
-        reparam_model = numpyro.handlers.reparam(pvl_delta_model, config=config)
-        nuts_kernel = NUTS(reparam_model, target_accept_prob=0.9, max_tree_depth=15)
-        mcmc = MCMC(
-            nuts_kernel,
-            num_samples=1000,
-            num_warmup=5000,
-            num_chains=4,
-        )
-        key, subkey = jax.random.split(key)
-        mcmc.run(
-            subkey,
-            choices=choices,
-            rewards=rewards,
-            stop_condition=stop_condition,
-            load_blocks=load_blocks,
-            n_arms=n_arms,
-            n_subjects=n_subjects,
-        )
-        print("Sampling summary:")
-        mcmc.print_summary()
-        idata = az.from_numpyro(mcmc)
-        print("Sampling posterior predictive")
-        predictive = Predictive(reparam_model, mcmc.get_samples())
-        key, subkey = jax.random.split(key)
-        posterior_predictive = predictive(
-            subkey,
-            choices=choices,
-            rewards=rewards,
-            stop_condition=stop_condition,
-            n_arms=n_arms,
-            n_subjects=n_subjects,
-            load_blocks=load_blocks,
-        )
-        idata.extend(az.from_numpyro(posterior_predictive=posterior_predictive))
-        experiment["idata"] = idata
-        print("Saving experiment data")
-        joblib.dump(
-            experiment, experiments_dir.joinpath(f"experiment_{i_experiment}.joblib")
-        )
+        for model_name, model in MODELS.items():
+            experiment[model_name] = dict()
+            print("Recovering parameters with model:", model_name)
+            config = {
+                "probit_lr": LocScaleReparam(centered=0),
+                "probit_inv_t": LocScaleReparam(centered=0),
+                "probit_u_shape": LocScaleReparam(centered=0),
+                "probit_u_aversion": LocScaleReparam(centered=0),
+            }
+            # Reparameterizing model before running
+            reparam_model = numpyro.handlers.reparam(model, config=config)
+            nuts_kernel = NUTS(reparam_model, target_accept_prob=0.9, max_tree_depth=15)
+            mcmc = MCMC(
+                nuts_kernel,
+                num_samples=1000,
+                num_warmup=5000,
+                num_chains=4,
+            )
+            key, subkey = jax.random.split(key)
+            mcmc.run(
+                subkey,
+                choices=choices,
+                rewards=rewards,
+                stop_condition=stop_condition,
+                load_blocks=load_blocks,
+                n_arms=n_arms,
+                n_subjects=n_subjects,
+            )
+            print("Sampling summary:")
+            mcmc.print_summary(prob=0.95)
+            samples = mcmc.get_samples()
+            experiment[model_name]["summary"] = summary(samples, prob=0.95)
+            idata = az.from_numpyro(mcmc)
+            print("Sampling posterior predictive")
+            predictive = Predictive(reparam_model, mcmc.get_samples())
+            key, subkey = jax.random.split(key)
+            posterior_predictive = predictive(
+                subkey,
+                choices=choices,
+                rewards=rewards,
+                stop_condition=stop_condition,
+                n_arms=n_arms,
+                n_subjects=n_subjects,
+                load_blocks=load_blocks,
+            )
+            idata.extend(az.from_numpyro(posterior_predictive=posterior_predictive))
+            experiment[model_name]["idata"] = idata
+            print("Saving experiment data")
+            joblib.dump(
+                experiment,
+                experiments_dir.joinpath(f"experiment_{i_experiment}.joblib"),
+            )
 
 
 if __name__ == "__main__":
