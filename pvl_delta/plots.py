@@ -104,6 +104,8 @@ def plot_effects(idata):
         for i_cond, cond in enumerate(["load", "stop", "interaction"]):
             i_effect = i_var + i_cond * len(vars)
             effect_name = f"{cond}_{var}_effect"
+            if effect_name not in idata.posterior:
+                continue
             lower, higher = az.hdi(idata.posterior, var_names=effect_name)[
                 effect_name
             ].values
@@ -112,7 +114,7 @@ def plot_effects(idata):
             effect_title = (
                 "\\beta" if cond == "stop" else "\\pi" if cond == "load" else "\\zeta"
             )
-            effect_title = f"${effect_title}_{proper_name}$"
+            effect_title = f"${effect_title}_{{{proper_name}}}$"
             color = colors[i_effect]
             data = np.ravel(idata.posterior[effect_name].values)
             fig.add_trace(
