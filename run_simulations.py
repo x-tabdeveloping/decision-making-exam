@@ -121,7 +121,7 @@ def main():
         experiment = dict()
         print(f"=============[Experiment {i_experiment}]==============")
         print("Sampling parameters from prior")
-        key = jax.random.key(keys[i_experiment])
+        key = keys[i_experiment]
         experiment["key"] = keys[i_experiment]
         key, subkey = jax.random.split(key)
         stop_condition = jax.random.bernoulli(subkey, p=0.5, shape=n_subjects)
