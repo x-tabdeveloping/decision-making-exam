@@ -1,3 +1,4 @@
+from operator import attrgetter
 from pathlib import Path
 
 import arviz as az
@@ -20,6 +21,19 @@ MODELS = {
     "interactions_only": interaction_model,
     "vanilla": vanilla_model,
 }
+
+
+def diagnostics_summary(mcmc, exclude_deterministic=True, prob=0.95):
+    sites = mcmc._states[mcmc._sample_field]
+    if isinstance(sites, dict) and exclude_deterministic:
+        state_sample_field = attrgetter(mcmc._sample_field)(mcmc._last_state)
+        if isinstance(state_sample_field, dict):
+            sites = {
+                k: v
+                for k, v in mcmc._states[mcmc._sample_field].items()
+                if k in state_sample_field
+            }
+    return summary(sites, prob=prob)
 
 
 def simulate_outcomes(
@@ -186,7 +200,7 @@ def main():
             print("Sampling summary:")
             mcmc.print_summary(prob=0.95)
             samples = mcmc.get_samples()
-            experiment[model_name]["summary"] = summary(samples, prob=0.95)
+            experiment[model_name]["summary"] = diagnostics_summary(samples, prob=0.95)
             idata = az.from_numpyro(mcmc)
             print("Sampling posterior predictive")
             predictive = Predictive(reparam_model, mcmc.get_samples())
