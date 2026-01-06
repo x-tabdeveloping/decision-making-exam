@@ -171,3 +171,105 @@ def pvl_delta_model(
         )
         logits = q * theta[:, :, None]
         numpyro.sample("obs", dist.Categorical(logits=logits), obs=choices)
+
+
+def vanilla_model(
+    stop_condition,
+    n_arms,
+    n_subjects,
+    rewards=None,
+    choices=None,
+    load_blocks=None,
+    prior=False,
+):
+    """PVL model without effects"""
+
+    def update_qs(
+        qs,
+        data,
+        lr,
+        u_aversion,
+        u_shape,
+    ):
+        n_subjects, n_arms = qs.shape
+        choice = data["c"]
+        reward = data["r"]
+        regret = (
+            utility_function(reward, u_aversion, u_shape)
+            - qs[jnp.arange(n_subjects), choice]
+        )
+        qs = qs.at[jnp.arange(n_subjects), choice].add(lr * regret)
+        return qs, qs
+
+    def trace_qs(
+        c,
+        r,
+        q0s,
+        lr,
+        u_aversion,
+        u_shape,
+    ):
+        _, states = jax.lax.scan(
+            partial(
+                update_qs,
+                lr=lr,
+                u_aversion=u_aversion,
+                u_shape=u_shape,
+            ),
+            q0s,
+            xs={
+                "c": c,
+                "r": r,
+            },
+        )
+        return states
+
+    lr_loc = numpyro.sample("lr_loc", dist.Normal(loc=0, scale=1))
+    lr_scale = numpyro.sample("lr_scale", dist.Uniform(0, 1))
+    inv_t_loc = numpyro.sample("inv_t_loc", dist.Normal(loc=0, scale=1))
+    inv_t_scale = numpyro.sample("inv_t_scale", dist.Uniform(0, 1))
+    u_shape_loc = numpyro.sample("u_shape_loc", dist.Normal(loc=0, scale=1))
+    u_shape_scale = numpyro.sample("u_shape_scale", dist.Uniform(0, 1))
+    u_aversion_loc = numpyro.sample("u_aversion_loc", dist.Normal(loc=0, scale=1))
+    u_aversion_scale = numpyro.sample("u_aversion_scale", dist.Uniform(0, 1))
+    with numpyro.plate("n_subjects", n_subjects):
+        probit_lr = numpyro.sample("probit_lr", dist.Normal(lr_loc, lr_scale))
+        probit_inv_t = numpyro.sample(
+            "probit_inv_t", dist.Normal(inv_t_loc, inv_t_scale)
+        )
+        probit_u_aversion = numpyro.sample(
+            "probit_u_aversion", dist.Normal(u_aversion_loc, u_aversion_scale)
+        )
+        probit_u_shape = numpyro.sample(
+            "probit_u_shape", dist.Normal(u_shape_loc, u_shape_scale)
+        )
+    lr = numpyro.deterministic(
+        "lr",
+        inv_probit(probit_lr),
+    )
+    u_aversion = numpyro.deterministic(
+        "u_aversion",
+        5 * inv_probit(probit_u_aversion),
+    )
+    u_shape = numpyro.deterministic(
+        "u_shape",
+        inv_probit(probit_u_shape),
+    )
+    inv_t = numpyro.deterministic(
+        "inv_t",
+        5 * inv_probit(probit_inv_t),
+    )
+    # Adding the trial-level load block effect before transforming
+    theta = numpyro.deterministic("theta", jnp.power(3, inv_t) - 1)
+    if not prior:
+        q0 = np.zeros((n_subjects, n_arms), dtype=jnp.float64)
+        q = trace_qs(
+            choices,
+            rewards,
+            q0,
+            lr=lr,
+            u_aversion=u_aversion,
+            u_shape=u_shape,
+        )
+        logits = q * theta[None, :, None]
+        numpyro.sample("obs", dist.Categorical(logits=logits), obs=choices)
