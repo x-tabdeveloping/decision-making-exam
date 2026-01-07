@@ -1,69 +1,203 @@
 from pathlib import Path
 
+import arviz as az
 import joblib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sklearn.metrics import f1_score
 
 from pvl_delta import trace_qs
 
-experiments_path = Path("experiments")
-experiment_files = [file for file in experiments_path.glob("*.joblib")]
+experiments_path = Path("simulation_results")
+experiment_files = [
+    experiments_path.joinpath(f"experiment_{i}.joblib") for i in [7, 1, 2, 8, 0]
+]
 
-
-def calculate_f1s(idata, choices):
-    pred_choices = idata.posterior_predictive["obs"].squeeze()
-    c = np.ravel(choices)
-    f1s = []
-    for draw, p_choice in pred_choices.groupby("draw"):
-        p_c = np.ravel(p_choice)
-        f1s.append(f1_score(p_c, c, average="macro"))
-    return np.array(f1s)
-
-
-# Plotting subject level parameter recovery
-subject_level_params = ["lr", "inv_t", "u_shape", "u_aversion"]
-fig = make_subplots(rows=len(subject_level_params), cols=len(experiment_files))
-color_scheme = px.colors.qualitative.Bold
-records = []
+comp_dfs = []
 for i_experiment, experiment_file in enumerate(experiment_files):
     print(experiment_file)
     data = joblib.load(experiment_file)
-    idata = data["idata"]
-    stop_condition = data["stop_condition"]
-    for i_param, param in enumerate(subject_level_params):
-        vals = idata.posterior[param].values
-        vals = vals.reshape(-1, vals.shape[-1])
-        for i_subject, (subject_vals, subject_stop) in enumerate(
-            zip(vals.T, stop_condition)
-        ):
-            fig.add_trace(
-                go.Box(
-                    name=f"Subject {i_subject}",
-                    showlegend=False,
-                    y=subject_vals,
-                    line_color=color_scheme[int(subject_stop)],
-                ),
-                col=i_experiment + 1,
-                row=i_param + 1,
-            )
+    comp_df = az.compare(
+        {
+            model_name: data[model_name]["idata"]
+            for model_name in ["vanilla", "interactions_only", "full"]
+        },
+        ic="waic",
+    )
+    print(comp_df)
+    comp_dfs.append(comp_df)
+
+for experiment_file, comp_df in zip(experiment_files, comp_dfs):
+    comp_df["experiment"] = experiment_file.stem.split("_")[-1]
+overall_comp = pd.concat([df.reset_index() for df in comp_dfs])
+
+fig = px.scatter(
+    overall_comp,
+    y="index",
+    color="index",
+    x="elpd_waic",
+    facet_col="experiment",
+    error_x="se",
+)
+fig = fig.update_xaxes(matches=None)
+fig = fig.update_layout(
+    width=800,
+    height=400,
+    template="plotly_white",
+    font=dict(family="Times New Roman", size=16, color="black"),
+)
+fig = fig.update_traces(showlegend=False)
+fig = fig.update_yaxes(title="")
 fig.show()
 
-
-records = []
+fig = make_subplots(cols=len(experiment_files), rows=2)
 for i_experiment, experiment_file in enumerate(experiment_files):
     print(experiment_file)
     data = joblib.load(experiment_file)
-    idata = data["idata"]
-    c = data["choices"]
-    f1s = calculate_f1s(idata, c)
-    for f1 in f1s:
-        records.append(dict(f1=f1, experiment=i_experiment))
-df = pd.DataFrame.from_records(records)
-print(df.groupby("experiment").agg(["mean", "std"]))
+    for i_model, model in enumerate(["interactions_only", "full"]):
+        if model not in data:
+            print(model, "not in data, skipping")
+            continue
+        idata = data[model]["idata"]
+        params = data["params"]
+        vars = {"u_shape": "A'", "u_aversion": "w'", "lr": "a'", "inv_t": "c'"}
+        colors = px.colors.qualitative.Dark24
+        for i_var, var in enumerate(vars):
+            for i_cond, cond in enumerate(["load", "stop", "interaction"]):
+                i_effect = i_var + i_cond * len(vars)
+                effect_name = f"{cond}_{var}_effect"
+                if effect_name not in idata.posterior:
+                    continue
+                lower, higher = az.hdi(idata.posterior, var_names=effect_name)[
+                    effect_name
+                ].values
+                mean = idata.posterior[effect_name].values.mean()
+                proper_name = vars[var]
+                effect_title = (
+                    "\\beta"
+                    if cond == "stop"
+                    else "\\pi"
+                    if cond == "load"
+                    else "\\zeta"
+                )
+                effect_title = f"${effect_title}_{{{proper_name}}}$"
+                color = colors[i_effect]
+                vals = np.ravel(idata.posterior[effect_name].values)
+                fig.add_trace(
+                    go.Violin(
+                        x=vals,
+                        y0=effect_title,
+                        line_color=color,
+                        name=effect_name,
+                        showlegend=False,
+                        orientation="h",
+                        points=False,
+                        side="positive",
+                        width=0.5,
+                        opacity=0.7,
+                    ),
+                    col=i_experiment + 1,
+                    row=i_model + 1,
+                )
+                fig.add_scatter(
+                    x=[mean],
+                    y=[effect_title],
+                    marker=dict(color=color, line=dict(width=2, color="black")),
+                    error_x=dict(
+                        type="data",
+                        symmetric=False,
+                        array=[higher - mean],
+                        arrayminus=[mean - lower],
+                    ),
+                    showlegend=False,
+                    col=i_experiment + 1,
+                    row=i_model + 1,
+                )
+                fig.add_scatter(
+                    x=[params[effect_name]],
+                    y=[effect_title],
+                    marker=dict(color="white", line=dict(width=2, color="black")),
+                    showlegend=False,
+                    col=i_experiment + 1,
+                    row=i_model + 1,
+                )
+fig.add_vline(x=0, line_width=2, line_color="black")
+fig = fig.update_xaxes(range=(-6, 6))
+fig = fig.update_layout(
+    template="plotly_white",
+    font=dict(family="Times New Roman", size=16, color="black"),
+    margin=dict(t=10, l=10, r=10, b=10),
+)
+fig = fig.update_annotations(
+    font=dict(family="Times New Roman", size=18, color="black")
+)
+fig = fig.update_xaxes(title="Effect size")
+fig.show()
+
+fig = make_subplots(cols=len(experiment_files), rows=3)
+n_subjects = data["full"]["idata"].posterior["probit_lr"].shape[-1]
+for i_experiment, experiment_file in enumerate(experiment_files):
+    print(experiment_file)
+    data = joblib.load(experiment_file)
+    for i_model, model in enumerate(["vanilla", "interactions_only", "full"]):
+        if model not in data:
+            print(model, "not in data, skipping")
+            continue
+        idata = data[model]["idata"]
+        params = data["params"]
+        vars = {
+            "probit_u_shape": "A'",
+            "probit_u_aversion": "w'",
+            "probit_lr": "a'",
+            "probit_inv_t": "c'",
+        }
+        colors = px.colors.qualitative.Dark24
+        for i_var, var in enumerate(vars):
+            fig.add_scatter(
+                x=params[var],
+                y=params[var],
+                mode="lines",
+                col=i_experiment + 1,
+                row=i_model + 1,
+                line=dict(width=2, color="black"),
+                showlegend=False,
+            )
+            for i_subject in range(n_subjects):
+                vals = np.ravel(idata.posterior[var][:, :, i_subject].values)
+                lower, higher = az.hdi(vals)
+                mean = np.mean(vals)
+                proper_name = vars[var]
+                color = colors[i_var]
+                fig.add_scatter(
+                    name=vars[var],
+                    y=[mean],
+                    x=[params[var][i_subject]],
+                    marker=dict(color=color, line=dict(width=2, color="black")),
+                    error_y=dict(
+                        type="data",
+                        symmetric=False,
+                        array=[higher - mean],
+                        arrayminus=[mean - lower],
+                    ),
+                    showlegend=(i_model == 0)
+                    and (i_experiment == 0)
+                    and (i_subject == 0),
+                    col=i_experiment + 1,
+                    row=i_model + 1,
+                )
+fig = fig.update_layout(
+    template="plotly_white",
+    font=dict(family="Times New Roman", size=16, color="black"),
+    margin=dict(t=10, l=10, r=10, b=10),
+)
+fig = fig.update_annotations(
+    font=dict(family="Times New Roman", size=18, color="black")
+)
+fig = fig.update_xaxes(title="")
+fig.show()
 
 
 # Effect and population level parameter recovery
@@ -71,10 +205,8 @@ fig = make_subplots(rows=2, cols=5)
 for i_experiment, experiment_file in enumerate(experiment_files):
     print(experiment_file)
     data = joblib.load(experiment_file)
-    idata = data["idata"]
+    idata = data["full"]["idata"]
     param_names = [
-        "stop_lr_effect",
-        "stop_inv_t_effect",
         "lr_loc",
         "inv_t_loc",
         "u_aversion_loc",
@@ -114,108 +246,5 @@ for i_experiment, experiment_file in enumerate(experiment_files):
         )
 fig.show()
 
-data["ev"]
-
-# Plotting EV recovery
-n_experiments = len(experiment_files)
-n_subjects = len(data["params"]["lr"])
-fig = make_subplots(rows=n_subjects + 1, cols=n_experiments)
-for i_experiment, experiment_file in enumerate(experiment_files):
-    print(experiment_file)
-    data = joblib.load(experiment_file)
-    idata = data["idata"]
-    lr = data["params"]["lr"]
-    n_subjects = lr.shape[0]
-    n_arms = len(np.unique(data["choices"]))
-    color_scheme = px.colors.qualitative.Bold
-    # trials, subjects, arms
-    q_true = trace_qs(
-        c=data["choices"],
-        r=data["rewards"],
-        q0s=np.zeros((n_subjects, n_arms)),
-        learning_rates=lr,
-        u_aversion=data["params"]["u_aversion"],
-        u_shape=data["params"]["u_shape"],
-    )
-    # subjects, arms, trials
-    q_true = np.transpose(q_true, (1, 2, 0))
-    mean_posterior = idata.posterior.mean(dim=["chain", "draw"])
-    # trials, subjects, arms
-    q_pred = trace_qs(
-        c=data["choices"],
-        r=data["rewards"],
-        q0s=np.zeros((n_subjects, n_arms)),
-        learning_rates=mean_posterior["lr"].values,
-        u_aversion=mean_posterior["u_aversion"].values,
-        u_shape=mean_posterior["u_shape"].values,
-    )
-    # subjects, arms, trials
-    q_pred = np.transpose(q_pred, (1, 2, 0))
-    for i_subject, q_subj in enumerate(q_pred):
-        for arm, pred in enumerate(q_subj):
-            true = q_true[i_subject, arm, :]
-            fig.add_scatter(
-                x=np.arange(len(pred)),
-                y=pred,
-                line=dict(dash="dash", color=color_scheme[arm]),
-                showlegend=False,
-                col=i_experiment + 1,
-                row=i_subject + 1,
-            )
-            fig.add_scatter(
-                x=np.arange(len(pred)),
-                y=true,
-                line=dict(color=color_scheme[arm]),
-                showlegend=False,
-                col=i_experiment + 1,
-                row=i_subject + 1,
-            )
-            fig.add_scatter(
-                x=[len(pred) - 1],
-                y=[data["ev"][arm]],
-                mode="markers",
-                marker=dict(
-                    color=color_scheme[arm], size=12, line=dict(color="black", width=2)
-                ),
-                showlegend=False,
-                col=i_experiment + 1,
-                row=i_subject + 1,
-            )
-    # Last row is for effect recovery
-    param_names = [
-        "stop_lr_effect",
-        "stop_inv_t_effect",
-        "lr_loc",
-        "inv_t_loc",
-        "u_aversion_loc",
-        "u_shape_loc",
-    ]
-    for i_effect, effect in enumerate(param_names):
-        effect_name = " ".join(effect.split("_")).title()
-        fig.add_trace(
-            go.Box(
-                y=np.ravel(idata.posterior[effect]),
-                name=effect_name,
-                line_color=color_scheme[i_effect],
-                opacity=0.7,
-                showlegend=False,
-            ),
-            col=i_experiment + 1,
-            row=n_subjects + 1,
-        )
-        fig.add_scatter(
-            x=[effect_name],
-            y=[data["params"][effect]],
-            marker=dict(
-                size=12,
-                symbol="diamond-wide-dot",
-                color=color_scheme[i_effect],
-                line=dict(width=2, color="black"),
-            ),
-            showlegend=False,
-            col=i_experiment + 1,
-            row=n_subjects + 1,
-        )
-fig = fig.update_xaxes(matches=None)
-fig = fig.update_layout(template="plotly_white", margin=dict(r=0, l=0, t=0, b=0))
-fig.show()
+for param in params:
+    pass
