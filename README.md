@@ -194,12 +194,3 @@ plot_effects(idata)
 
 ![effects](figures/example_effects.png)
 
-And you can see different params in the original space across conditions by using `plot_params`:
-
-```python
-from pvl_delta.plots import plot_params
-
-plot_params(idata, stop_condition)
-```
-
-![params](figures/example_params.png)
