@@ -137,6 +137,30 @@ posterior_predictive = predictive(
 idata.extend(az.from_numpyro(posterior_predictive=posterior_predictive))
 ```
 
+### Variational Inference
+
+You can also fit the model using stochastic variational inference by using NumPyro's automatic guide:
+
+```python
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoDiagonalNormal
+
+guide = AutoDiagonalNormal(reparam_model)
+svi = SVI(reparam_model, guide, numpyro.optim.Adam(3e-4), Trace_ELBO(10))
+svi_results = svi.run(
+    jax.random.key(42),
+    50000,
+    choices=choices,
+    rewards=rewards,
+    stop_condition=stop_condition,
+    load_blocks=load_blocks,
+    n_arms=n_arms,
+    n_subjects=n_subjects,
+)
+predictive = Predictive(guide, params=svi_results.params, num_samples=1000)
+posterior_samples = predictive(jax.random.key(1))
+```
+
 ### Recovering subjects' estimates of expected values
 
 Subjects, throughout the experiment keep track of their latent estimate of the expected value of each arm/deck.
