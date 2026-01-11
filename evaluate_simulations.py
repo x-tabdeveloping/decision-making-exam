@@ -38,7 +38,7 @@ def format_param_name(param_name):
 
 experiments_path = Path("simulation_results")
 experiment_files = [
-    experiments_path.joinpath(f"experiment_{i}.joblib") for i in [7, 1, 2, 8, 0]
+    experiments_path.joinpath(f"experiment_{i}.joblib") for i in [0, 1, 2, 3, 4]
 ]
 
 comp_dfs = []
@@ -107,9 +107,7 @@ for i_experiment, experiment_file in enumerate(experiment_files):
                 effect_title = (
                     "\\beta"
                     if cond == "stop"
-                    else "\\pi"
-                    if cond == "load"
-                    else "\\zeta"
+                    else "\\pi" if cond == "load" else "\\zeta"
                 )
                 effect_title = f"${effect_title}_{{{proper_name}}}$"
                 color = colors[i_effect]
