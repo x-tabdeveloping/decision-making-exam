@@ -121,7 +121,7 @@ def simulate_outcomes(
 def main():
     n_trials = 202
     n_subjects = 64
-    n_experiments = 10
+    n_experiments = 5
     n_arms = 6
     p_win = jnp.array([0.2, 0.25, 0.33, 0.47, 0.61, 0.87])
     # We denote them in the lowest stake
@@ -130,7 +130,8 @@ def main():
     ev = win_reward / 3 * (10.5 * p_win - 3.5)
     experiments_dir = Path("simulation_results/")
     experiments_dir.mkdir(exist_ok=True)
-    keys = [jax.random.key(n) for n in range(40, 50)]
+    keys = [47, 41, 42, 48, 40]
+    keys = [jax.random.key(n) for n in keys]
     for i_experiment in range(n_experiments):
         experiment = dict()
         print(f"=============[Experiment {i_experiment}]==============")
